@@ -7,7 +7,7 @@ All analysis were ran in ISCA - HPC from the UoE
 
 # 1. Quality check analysis
 
-
+```
 #!/bin/bash
 #SBATCH --export=ALL # export all environment variables to the batch job
 #SBATCH -D . # set working directory to .
@@ -27,3 +27,14 @@ fastp -i ${f}_r1.fq.gz -I ${f}_r2.fq.gz -o ../3.fastp/${f}_r1_fastp.fq.gz -O ../
 --trim_poly_g
 done
 
+#get stats of the files with seqkit
+
+seqkit stats *.gz
+
+#multiqc visualisation
+
+module load MultiQC/1.2-intel-2017b-Python-2.7.14
+
+multiqc .
+
+```
