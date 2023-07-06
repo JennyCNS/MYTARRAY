@@ -1,7 +1,8 @@
 # Mytilus SNParray
-In this project we developed a 60K SNP array for four species of blue mussels <\i> Mytilus edulis, M. galloprovincialis, M. trossulus and M. chilensis <\i>
-# Scripts used for the development of the Blue Mussel 60K SNP array
-# All analysis were ran in ISCA - HPC from the UoE 
+In this project we developed a 60K SNP array for four species of blue mussels  _Mytilus edulis, M. galloprovincialis, M. trossulus and M. chilensis _
+
+## Scripts used for the development of the Blue Mussel 60K SNP array
+All analysis were ran in ISCA - HPC from the UoE 
 
 
 # 1. Quality check analysis
