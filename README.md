@@ -459,3 +459,39 @@ echo done vcf
 #Tidy up and remove the new bed
 rm -f $new_bed
 ```
+
+Qaulimap
+```
+#!/bin/bash
+#SBATCH -D .
+#SBATCH -p pq
+#SBATCH --time=6:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=2
+#SBATCH -A Research_Project-189125
+#SBATCH --job-name=qualimap
+#SBATCH --error=qualimap.err.txt
+#SBATCH --output=qualimap.out.txt
+#SBATCH --export=All
+#SBATCH --array=0-200%20
+
+module purge
+module load Java/1.8.0_92
+
+simpleID_array=( `cat $metadata | cut -f 1` )
+simpleID=${simpleID_array[(($SLURM_ARRAY_TASK_ID))]}
+
+bam_path=/gpfs/ts0/projects/Research_Project-189125/snp/8.dedup/
+samples=/gpfs/ts0/projects/Research_Project-189125/snp/metadata/SNP-array-metadata.txt
+
+
+## In array ##
+insampleID_array=( `cat $samples |  cut -f 1` )
+insampleID=$bam_path/${insampleID_array[(($SLURM_ARRAY_TASK_ID))]}
+## Out array
+outsampleID_array=( `cat $samples | cut -f 1` )
+outsampleID=$bam_path/${outsampleID_array[(($SLURM_ARRAY_TASK_ID))]}
+
+qualimap=/gpfs/ts0/projects/Research_Project-189125/software/qualimap_v2.2.1
+$qualimap/qualimap bamqc -bam ${insampleID}.sorted.dups.bam -outdir ${outsampleID}_qualimap --java-mem-size=32G -nt 2
+```
