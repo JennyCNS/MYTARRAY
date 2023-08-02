@@ -315,6 +315,70 @@ samtools merge ${out}_merged_sorted.raw.bam ${out}_sorted.raw.bam ${out}_a_sorte
 done
 ```
 
+
+dedup and rename
+
+```
+#!/bin/bash
+#SBATCH -D .
+#SBATCH -p highmem
+#SBATCH --time=05:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=2
+#SBATCH -A Research_Project-189125
+#SBATCH --job-name=master_dedup_merged
+#SBATCH --error=master_dedup_merged.err.txt
+#SBATCH --output=master_dedup_merged.out.txt
+#SBATCH --export=All
+#SBATCH --array=0-20%20
+#SBATCH --mail-type=END # send email at job completion
+#SBATCH --mail-user=jn378@exeter.ac.uk # email address
+
+## Change the directories and add the sampleID metadata file ##
+
+module load picard/2.6.0-Java-1.8.0_131
+
+samples=/gpfs/ts0/projects/Research_Project-189125/snp/metadata/alexi-merged.txt
+
+bam_path=/gpfs/ts0/projects/Research_Project-189125/snp/7.merged/
+
+## In array ##
+insampleID_array=( `cat $samples |  cut -f 1` )
+insampleID=$bam_path/${insampleID_array[(($SLURM_ARRAY_TASK_ID))]}
+
+## Out array
+outsampleID_array=( `cat $samples | cut -f 1` )
+outsampleID=$bam_path/${outsampleID_array[(($SLURM_ARRAY_TASK_ID))]}
+
+## Mark duplicates in bam files ##
+
+java -Xmx10g -jar $EBROOTPICARD/picard.jar MarkDuplicates I=$insampleID.sorted.rg.bam REMOVE_DUPLICATES=true \
+VALIDATION_STRINGENCY=LENIENT AS=true METRICS_FILE=$outsampleID.sorted.dups.metrics.txt OUTPUT=$outsampleID.sorted.dups.b
+am TMP_DIR=/gpfs/ts0/scratch/jn378/tmp
+
+### Index the Deduped merged bam files
+
+
+java -Xmx10g -Djava.io.tmpdir=/gpfs/ts0/scratch/jn378/tmp -jar $EBROOTPICARD/picard.jar BuildBamIndex \
+I=$outsampleID.sorted.dups.bam VALIDATION_STRINGENCY=LENIENT
+(base) [jn378@login02 7.merged]$
+(base) [jn378@login02 7.merged]$
+(base) [jn378@login02 7.merged]$ ^C
+(base) [jn378@login02 7.merged]$ ls
+?  add-readgroups.sh  dedup-jenny.sh  dedup2.sh  merge_samples.sh  rename.sh
+(base) [jn378@login02 7.merged]$ more rename.sh
+for file in *_merged.sorted.rg.bam
+do
+    mv -i "${file}" "${file/_merged.sorted.rg.bam/.sorted.rg.bam}"
+done
+(base) [jn378@login02 7.merged]$ more rename.sh
+for file in *_merged.sorted.rg.bam
+do
+    mv -i "${file}" "${file/_merged.sorted.rg.bam/.sorted.rg.bam}"
+done
+
+```
+
 cut chunks of genome to call SNPs from
 
 ```
@@ -494,4 +558,277 @@ outsampleID=$bam_path/${outsampleID_array[(($SLURM_ARRAY_TASK_ID))]}
 
 qualimap=/gpfs/ts0/projects/Research_Project-189125/software/qualimap_v2.2.1
 $qualimap/qualimap bamqc -bam ${insampleID}.sorted.dups.bam -outdir ${outsampleID}_qualimap --java-mem-size=32G -nt 2
+```
+
+
+merge scaffolds in vcf
+
+```
+#merge scaffol vcfs
+#here we merged the vcf's generated for all invidual scaffolds and merge them in one main vcf file
+
+while read -r name; do cat "./9.scf_dir/$name.vcf"; done < ./galo_genome_2/genome.bed | vcffirstheader | vcfstreamsort -w
+ 1000 | vcfuniq > merged_all.vcf
+
+done
+```
+
+
+filter missing data pops
+
+```
+#!/bin/bash
+#SBATCH --export=ALL # export all environment variables to the batch job
+#SBATCH -D . # set working directory to .
+#SBATCH -p pq # submit to the parallel queue
+#SBATCH --time=5:00:00 # maximum walltime for the job
+#SBATCH -A Research_Project-189125 # research project to submit under
+#SBATCH --nodes=1 # specify number of nodes
+#SBATCH --ntasks-per-node=16 # specify number of processors per node
+#SBATCH --output=create_pops5.out.txt
+#SBATCH --error=create_pops5.err.txt
+
+
+module load VCFtools/0.1.16-foss-2018b-Perl-5.28.0
+#module load Java/1.8.0_144
+#module load GATK/3.8-0-Java-1.8.0_144
+
+
+
+#update here to your directories
+#vcf=freebayes_raw.vcf
+#data=/gpfs/ts0/projects/Research_Project-205369/RobEllis/bams
+#reference=/gpfs/ts0/projects/Undergraduate_Teaching-205369/genome/GCA_001676915.1_ASM167691v1_genomic.fna
+
+main=/gpfs/ts0/projects/Research_Project-189125/snp/11.vcfs/snp_depth_filtered2.recode.vcf
+out=/gpfs/ts0/projects/Research_Project-189125/snp/11.vcfs/pops/stats/
+in=/gpfs/ts0/projects/Research_Project-189125/snp/11.vcfs/pops/
+
+
+#divide into pop specific vcf
+vcftools --vcf $main --keep $in/BBC.txt --max-missing 0.5 --out $out/BBC_50.filtered --recode --remove-filtered-all
+#vcftools --vcf $main --keep $in/BBC.txt --max-missing 0.8 --out $out/BBC_80.filtered --recode --remove-filtered-all
+
+#vcftools --vcf $main --keep $in/BBH.txt --max-missing 0.8 --out $out/BBH_80.filtered --recode --remove-filtered-all
+vcftools --vcf $main --keep $in/BBH.txt --max-missing 0.5 --out $out/BBH_50.filtered --recode --remove-filtered-all
+
+#vcftools --vcf $main --keep $in/CAF.txt --max-missing 0.8 --out $out/CAF_80.filtered --recode --remove-filtered-all
+vcftools --vcf $main --keep $in/CAF.txt --max-missing 0.5 --out $out/CAF_50.filtered --recode --remove-filtered-all
+
+#vcftools --vcf $main --keep $in/CC.txt --max-missing 0.8 --out $out/CC_80.filtered --recode --remove-filtered-all
+vcftools --vcf $main --keep $in/CC.txt --max-missing 0.5 --out $out/CC_50.filtered --recode --remove-filtered-all
+
+#vcftools --vcf $main --keep $in/CH.txt --max-missing 0.8 --out $out/CH_80.filtered --recode --remove-filtered-all
+vcftools --vcf $main --keep $in/CH.txt --max-missing 0.5 --out $out/CH_50.filtered --recode --remove-filtered-all
+
+#vcftools --vcf $main --keep $in/CRS.txt --max-missing 0.8 --out $out/CRS_80.filtered --recode --remove-filtered-all
+vcftools --vcf $main --keep $in/CRS.txt --max-missing 0.5 --out $out/CRS_50.filtered --recode --remove-filtered-all
+
+#vcftools --vcf $main --keep $in/CSI.txt --max-missing 0.8 --out $out/CSI_80.filtered --recode --remove-filtered-all
+vcftools --vcf $main --keep $in/CSI.txt --max-missing 0.5 --out $out/CSI_50.filtered --recode --remove-filtered-all
+
+#vcftools --vcf $main --keep $in/CV.txt --max-missing 0.8 --out $out/CV_80.filtered --recode --remove-filtered-all
+vcftools --vcf $main --keep $in/CV.txt --max-missing 0.5 --out $out/CV_50.filtered --recode --remove-filtered-all
+
+#vcftools --vcf $main --keep $in/DDE.txt --max-missing 0.8 --out $out/DDE_80.filtered --recode --remove-filtered-all
+vcftools --vcf $main --keep $in/DDE.txt --max-missing 0.5 --out $out/DDE_50.filtered --recode --remove-filtered-all
+
+#vcftools --vcf $main --keep $in/EX.txt --max-missing 0.8 --out $out/EX_80.filtered --recode --remove-filtered-all
+vcftools --vcf $main --keep $in/EX.txt --max-missing 0.5 --out $out/EX_50.filtered --recode --remove-filtered-all
+
+#vcftools --vcf $main --keep $in/BO.txt --max-missing 0.8 --out $out/BO_80.filtered --recode --remove-filtered-all
+vcftools --vcf $main --keep $in/BO.txt --max-missing 0.5 --out $out/BO_50.filtered --recode --remove-filtered-all
+
+#vcftools --vcf $main --keep $in/FAL.txt --max-missing 0.8 --out $out/FAL_80.filtered --recode --remove-filtered-all
+vcftools --vcf $main --keep $in/FAL.txt --max-missing 0.5 --out $out/FAL_50.filtered --recode --remove-filtered-all
+
+#vcftools --vcf $main --keep $in/Fin.txt --max-missing 0.8 --out $out/Fin_80.filtered --recode --remove-filtered-all
+vcftools --vcf $main --keep $in/Fin.txt --max-missing 0.5 --out $out/Fin_50.filtered --recode --remove-filtered-all
+
+#vcftools --vcf $main --keep $in/GA.txt --max-missing 0.8 --out $out/GA_80.filtered --recode --remove-filtered-all
+vcftools --vcf $main --keep $in/GA.txt --max-missing 0.5 --out $out/GA_50.filtered --recode --remove-filtered-all
+
+#vcftools --vcf $main --keep $in/GK.txt --max-missing 0.8 --out $out/GK_80.filtered --recode --remove-filtered-all
+vcftools --vcf $main --keep $in/GK.txt --max-missing 0.5 --out $out/GK_50.filtered --recode --remove-filtered-all
+
+#vcftools --vcf $main --keep $in/GR.txt --max-missing 0.8 --out $out/GR_80.filtered --recode --remove-filtered-all
+vcftools --vcf $main --keep $in/GR.txt --max-missing 0.5 --out $out/GR_50.filtered --recode --remove-filtered-all
+
+#vcftools --vcf $main --keep $in/IC.txt --max-missing 0.8 --out $out/IC_80.filtered --recode --remove-filtered-all
+vcftools --vcf $main --keep $in/IC.txt --max-missing 0.5 --out $out/IC_50.filtered --recode --remove-filtered-all
+
+#vcftools --vcf $main --keep $in/LF.txt --max-missing 0.8 --out $out/LF_80.filtered --recode --remove-filtered-all
+vcftools --vcf $main --keep $in/LF.txt --max-missing 0.5 --out $out/LF_50.filtered --recode --remove-filtered-all
+
+#vcftools --vcf $main --keep $in/OA.txt --max-missing 0.8 --out $out/OA_80.filtered --recode --remove-filtered-all
+vcftools --vcf $main --keep $in/OA.txt --max-missing 0.5 --out $out/OA_50.filtered --recode --remove-filtered-all
+
+#vcftools --vcf $main --keep $in/SBH.txt --max-missing 0.8 --out $out/SBH_80.filtered --recode --remove-filtered-all
+vcftools --vcf $main --keep $in/SBH.txt --max-missing 0.5 --out $out/SBH_50.filtered --recode --remove-filtered-all
+
+#vcftools --vcf $main --keep $in/PM.txt --max-missing 0.8 --out $out/PM_80.filtered --recode --remove-filtered-all
+vcftools --vcf $main --keep $in/PM.txt --max-missing 0.5 --out $out/PM_50.filtered --recode --remove-filtered-all
+
+#vcftools --vcf $main --keep $in/SW.txt --max-missing 0.8 --out $out/SW_80.filtered --recode --remove-filtered-all
+vcftools --vcf $main --keep $in/SW.txt --max-missing 0.5 --out $out/SW_50.filtered --recode --remove-filtered-all
+
+#vcftools --vcf $main --keep $in/VG.txt --max-missing 0.8 --out $out/VG_80.filtered --recode --remove-filtered-all
+vcftools --vcf $main --keep $in/VG.txt --max-missing 0.5 --out $out/VG_50.filtered --recode --remove-filtered-all
+```
+
+
+collaps pops
+
+```
+#!/bin/bash
+#SBATCH --export=ALL # export all environment variables to the batch job
+#SBATCH -D . # set working directory to .
+#SBATCH -p pq
+#SBATCH --time=6:00:00 # maximum walltime for the job
+#SBATCH -A Research_Project-189125 # research project to submit under
+#SBATCH --nodes=1 # specify number of nodes
+#SBATCH --ntasks-per-node=2 # specify number of processors per node
+#SBATCH --output=collapse50.out.txt
+#SBATCH --error=collapse50.err.txt
+
+
+module load VCFtools/0.1.16-foss-2018b-Perl-5.28.0
+module load BCFtools/1.9-foss-2018b
+
+
+#ls *.gz > merge-list.txt
+
+#bcftools merge -l merge-list.txt -Oz -o merged_80.vcf.gz
+
+
+
+#vcftools --gzvcf merged_80.vcf.gz --maf 0.05 --recode --remove-filtered-all --out merged_80_maf_0.05
+
+#vcftools --gzvcf merged_80.vcf.gz --maf 0.01 --recode --remove-filtered-all --out merged_80_maf_0.01
+
+#in this step we are are creating vcf files for each population containing the INTERCEPTING SNPs among populations
+bcftools isec -p snps BBC_50.gz BBH_50.gz BO_50.gz CAF_50.gz CC_50.gz CRS_50.gz CSI_50.gz CV_50.gz DDE_50.gz EX_50.gz FAL
+_50.gz Fin_50.gz GA_50.gz GK_50.gz GR_50.gz IC_50.gz LF_50.gz OA_50.gz PM_50.gz SBH_50.gz SW_50.gz VG_50.gz CH_50.gz n =
+23
+
+
+
+
+
+done
+```
+
+```
+#!/bin/bash
+#SBATCH --export=ALL # export all environment variables to the batch job
+#SBATCH -D . # set working directory to .
+#SBATCH -p pq # submit to the parallel queue
+#SBATCH --time=30:00:00 # maximum walltime for the job
+#SBATCH -A Research_Project-189125 # research project to submit under
+#SBATCH --nodes=1 # specify number of nodes
+#SBATCH --ntasks-per-node=16 # specify number of processors per node
+#SBATCH --output=maf.out.txt
+#SBATCH --error=maf.err.txt
+
+
+module load VCFtools/0.1.16-foss-2018b-Perl-5.28.0
+module load BCFtools/1.9-foss-2018b
+
+
+#ls *.gz > merge-list.txt
+
+bcftools merge -l merge-list.txt -Oz -o merged_50.vcf.gz
+
+
+
+vcftools --gzvcf merged_50.vcf.gz --maf 0.05 --recode --remove-filtered-all --out merged_50_maf_0.05
+
+vcftools --gzvcf merged_50.vcf.gz --maf 0.01 --recode --remove-filtered-all --out merged_50_maf_0.01
+
+done
+```
+
+filter unique snps
+```
+#!/bin/bash
+#SBATCH --export=ALL # export all environment variables to the batch job
+#SBATCH -D . # set working directory to .
+#SBATCH -p pq
+#SBATCH --time=48:00:00 # maximum walltime for the job
+#SBATCH -A Research_Project-189125 # research project to submit under
+#SBATCH --nodes=1 # specify number of nodes
+#SBATCH --ntasks-per-node=2 # specify number of processors per node
+#SBATCH --output=collapse50.out.txt
+#SBATCH --error=collapse50.err.txt
+
+
+module load VCFtools/0.1.16-foss-2018b-Perl-5.28.0
+module load BCFtools/1.9-foss-2018b
+
+
+#ls *.gz > merge-list.txt
+
+#bcftools merge -l merge-list.txt -Oz -o merged_80.vcf.gz
+
+
+
+#vcftools --gzvcf merged_80.vcf.gz --maf 0.05 --recode --remove-filtered-all --out merged_80_maf_0.05
+
+#vcftools --gzvcf merged_80.vcf.gz --maf 0.01 --recode --remove-filtered-all --out merged_80_maf_0.01
+
+
+#in this script we are creating vcf files for each pop, containing the UNIQUE snps in each populations - SNPs that are pr
+esent in these pops alone
+bcftools isec -p unique_snps/bbc -C BBC_50.gz BBH_50.gz BO_50.gz CAF_50.gz CC_50.gz CRS_50.gz CSI_50.gz CV_50.gz DDE_50.g
+z EX_50.gz FAL_50.gz Fin_50.gz GA_50.gz GK_50.gz GR_50.gz IC_50.gz LF_50.gz OA_50.gz PM_50.gz SBH_50.gz SW_50.gz VG_50.gz
+ CH_50.gz
+
+```
+
+pop stats
+
+```
+
+#!/bin/bash
+#SBATCH --export=ALL # export all environment variables to the batch job
+#SBATCH -D . # set working directory to .
+#SBATCH -p pq # submit to the parallel queue
+#SBATCH --time=2:00:00 # maximum walltime for the job
+#SBATCH -A Research_Project-189125 # research project to submit under
+#SBATCH --nodes=1 # specify number of nodes
+#SBATCH --ntasks-per-node=16 # specify number of processors per node
+#SBATCH --output=pop_stats.out.txt
+#SBATCH --error=pop_stats.err.txt
+#SBATCH --array=0-25%25
+
+
+module load VCFtools/0.1.16-foss-2018b-Perl-5.28.0
+module load Java/1.8.0_144
+module load GATK/3.8-0-Java-1.8.0_144
+
+out=/gpfs/ts0/projects/Research_Project-189125/snp/11.vcfs/pops/stats/pop50/stats-pop50/
+
+ls *.vcf > pops.fofn
+
+simpleID_array=( `cat pops.fofn` )
+simpleID=${simpleID_array[(($SLURM_ARRAY_TASK_ID))]}
+
+#divide into pop specific vcf
+#vcftools --vcf $main --keep ${simpleID} --out $out/${simpleID}.filtered --recode --remove-filtered-all
+#vcftools --gzvcf allele_filtered.recode.vcf.gz --freq2 --out a_freq --max-alleles 2
+
+#calculate mean depth per individual
+vcftools --vcf ${simpleID} --site-mean-depth --out $out/${simpleID}
+#calculate depth per individual
+vcftools --vcf ${simpleID} --depth --out $out/${simpleID}
+#calculate quality per SNP call
+vcftools --vcf ${simpleID} --site-quality --out $out/${simpleID}
+#calculate heterozigosity
+vcftools --vcf ${simpleID} --het --out $out/${simpleID}
+#calculate missing data per individual
+vcftools --vcf ${simpleID} --missing-individual --out $out/${simpleID}
+#calculate missing data per site
+vcftools --vcf ${simpleID} --missing-site --out $out/${simpleID}
+#calulate missing dat per individual
+vcftools --vcf ${simpleID} --missing-indv --out $out/${simpleID}
 ```
