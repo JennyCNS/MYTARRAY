@@ -832,3 +832,43 @@ vcftools --vcf ${simpleID} --missing-site --out $out/${simpleID}
 #calulate missing dat per individual
 vcftools --vcf ${simpleID} --missing-indv --out $out/${simpleID}
 ```
+
+
+
+
+###to call final set snps
+```
+module load BEDTools/2.27.1-foss-2018b
+
+#genome=/gpfs/ts0/projects/Research_Project-189125/snp/galo_genome_2/mgal_unzip_genome.bed
+#in=/gpfs/ts0/projects/Research_Project-189125/snp/11.vcfs/snps-array/maxmiss50/merged_mono_flank_maf_0.01_miss0.05.filtered.vcf
+#in2=/gpfs/ts0/projects/Research_Project-189125/snp/11.vcfs/snps-array/maxmiss50/LF_50.filtered.recode.vcf
+
+grep -v "^#" trimed_maf_0.01_flank_miss_0.5.vcf | awk -v OFS='\t' '{ print $1"\t"$2"\t"$2}' > snps.bed
+
+#bedtools flank -i snps.bed -g mgal_unzip_genome.bed -b 35 > flank_seq.bed
+
+#at this stage mg_00001 was giving issues (bedtools didnt like that it started at the begining of the genome)
+#so I've created a bed file containing the faulty reads of mg_00001 (grep -v mg_00001) 
+#created a bed file without the mg_00001 sequences
+#ran this file on bedtools
+#summed the proper ends of the flanking regions in excel
+#combined both files and went to the next step
+bedtools getfasta -fi mgal_unzip_genome.fa -bed flank_seq.bed > flank-seq.fasta
+#bedtools getfasta -fi /gpfs/ts0/projects/Research_Project-189125/snp/galo_genome_2/mgal_unzip_genome.fa -bed new.bed > flank-seq.fasta 
+
+#cat flank-seq.fasta | sed -n '1~4p' > left.seq.bed
+#cat flank-seq.fasta | sed -n '2~4p' > left2.seq.bed
+#cat flank-seq.fasta | sed -n '3~4p' > right.seq.bed
+#cat flank-seq.fasta | sed -n '4~4p' > right2.seq.bed
+#paste left.seq.bed left2.seq.bed right.seq.bed right2.seq.bed | awk '{ print $1"\t"$2"\t"$3"\t"$4 }' > final-flank-seq.bed 
+
+
+#grep -v "^#" snps-filtered-from-ends.vcf | awk '{ print $1"\t["$4"/"$5"]\t"$1"\t"$2"\t"$4"\t"$5 }' > trial2.txt 
+#paste trial2.txt final-flank-seq.bed | awk '{ print $1"\t"$8""$2""$10 }' > list-snps-flanks.txt
+#paste list-snps-flanks.txt trial2.txt | awk '{ print $1"\t"$2"\t"$5"\t"$6"\t"$7"\t"$8"\t"$9 }' > excel.txt
+#cat excel.txt | awk '{gsub("[0-9]*","",$1)}1'|  awk '{gsub(/mg_/,"myt_"NR,$1); print}' > final-snp-set.txt
+#awk -F mytilus '{$1= FS"\t" $1;}1' < final-snp-set.txt > snp-set.txt
+#awk '{print $1"\t"$2"\t"$3"\t""NA""\t""Standard""\t" $4 "\t" $5 "\t"$6"\t"$7}' snp-set.txt > snp-set-2.txt
+#awk 'BEGIN{print "Organism" "\t" "snpid" "\t" "Seventyonemer" "\t" "Tiling_order" "\t" "Importance" "\t" "Chromosome" "\t" "Position" "\t" "Ref_allele" "\t" "Alt_allele"}1' snp-set-2.txt > snp-set-final-all.txt
+```
