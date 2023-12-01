@@ -572,6 +572,14 @@ while read -r name; do cat "./9.scf_dir/$name.vcf"; done < ./galo_genome_2/genom
 
 done
 ```
+#filter for monomorphic flanking probes
+
+```
+awk '{print NR,$1,$2,two_before_current,one_before_current; two_before_current=one_before_current; one_before_current=$0}' <(grep -v '^#' snp_depth_filtered2.
+recode.vcf | awk '{print $1,$2}') | awk '{if ((($2==$6)&&(($7+35)>$3)) || (($4==$6) && ($7-$5<35))) print $0"\tno\tcurrent="$7"\tprevious="$5"\tposterior="$3"
+\tdiff_current_previos="$7-$5"\tdiff_posterior_current="$3-$7; else print $0"\tyes\tcurrent="$7"\tprevious="$5"\tposterior="$3"\tdiff_current_previos="$7-$5"\
+tdiff_posterior_current="$3-$7}' | grep 'yes' | awk 'NF==13' | awk '{print $6, $7, $9}' | sed 's/current=//g' |awk '{if($2==$3) print $1, $2}' > mono_snps.txt
+```
 
 
 filter missing data pops
